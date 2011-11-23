@@ -1,0 +1,10 @@
+## Interface: 42000
+## Title: Teki
+## Notes: Alerts you when a player is near
+## Author: Soulsbane
+## Version: 1.0
+## X-Version-Type: Alpha
+
+SpellData.lua
+#Enemy.lua
+Teki.lua
