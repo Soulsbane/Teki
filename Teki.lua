@@ -4,19 +4,6 @@ local bit_band = bit.band
 
 local EnemiesSeen = {}
 
-local DoNothing = function() end
-local CheckForEnemy = function() end
-
-local HostileEvents = {
-  ["_DAMAGE"] = true,
-  ["_LEECH"] = true,
-  ["_DRAIN"] = true,
-  ["_STOLEN"] = true,
-  ["_INSTAKILL"] = true,
-  ["_INTERRUPT"] = true,
-  ["_MISSED"] = true
-}
-
 local AllianceRaces = {
 	["Draenei"] = true,
 	["Dwarf"] = true,
@@ -70,10 +57,8 @@ end
 local function PlayerIsHostile(flag, event, race, srcGUID)
 	local suffix = event:match(".+(_.-)$")
 
-
 	if bit_band(flag, 0x548) == 0x548 then
 		return true, "bit_band check with true value"
-	--elseif HostileEvents[suffix] and EnemyRaces[race] then
 	elseif EnemyRaces[race] then
 		return true, "EnemyRaces check TRUE value"
 	else
