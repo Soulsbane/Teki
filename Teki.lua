@@ -136,7 +136,7 @@ function EventFrame:PLAYER_LOGIN()
 	if UnitFactionGroup("player") == "Horde" then
 		EnemyRaces = AllianceRaces
 	else
-		EenemyRaces = HordeRaces
+		EnemyRaces = HordeRaces
 	end
 end
 
