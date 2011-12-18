@@ -111,7 +111,7 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 		print(hostileMsg)
 	end]]
 	--print(select(2, PlayerIsHostile(srcFlags, event, race, srcGUID)))
-	self:DebugPrint(timestamp, event)
+
 	if PlayerIsHostile(srcFlags, event, race, srcGUID) and IsPlayerInDangerZone() then
 		if EnemiesSeen[name] then
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
@@ -137,20 +137,7 @@ function Addon:OnInitialize()
 	end
 
 	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	self:RegisterEvent("PLAYER_TARGET_CHANGED")
-
-end
-
-function Addon:PLAYER_TARGET_CHANGED(event)
-	self:DebugPrint(event)
-	if UnitExists("target") then
-	end
 end
 
 function Addon:OnSlashCommand(msg)
-	if msg == "foo" then
-		self:Print("Testing msg argument: %s %s", msg, "and another")
-	else
-		self:Print(msg)
-	end
 end
