@@ -1,5 +1,4 @@
 local AddonName, Addon = ...
-local EventFrame = CreateFrame("Frame")
 local bit_band = bit.band
 
 local EnemiesSeen = {}
@@ -38,9 +37,7 @@ Tauren
 Scourge
 Goblin
 ]]
-EventFrame:SetScript("OnEvent", function(self, event, ...) if self[event] then return self[event](self, event, ...) end end)
-EventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-EventFrame:RegisterEvent("PLAYER_LOGIN")
+
 
 local function TekiPrint(msg)
 	print("Teki: ", msg)
@@ -98,7 +95,7 @@ function Addon:GetSubZoneText()
 	end
 end
 
-function EventFrame:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcGUID, srcName, srcFlags, srcFlags2, dstGUID, dstName, dstFlags, dstFlags2, ...)
+function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcGUID, srcName, srcFlags, srcFlags2, dstGUID, dstName, dstFlags, dstFlags2, ...)
 
 	if not srcName then return end
 	local class, race, sex, name, realm
@@ -114,7 +111,7 @@ function EventFrame:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster,
 		print(hostileMsg)
 	end]]
 	--print(select(2, PlayerIsHostile(srcFlags, event, race, srcGUID)))
-
+	self:DebugPrint(timestamp, event)
 	if PlayerIsHostile(srcFlags, event, race, srcGUID) and IsPlayerInDangerZone() then
 		if EnemiesSeen[name] then
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
@@ -132,11 +129,28 @@ function EventFrame:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster,
 	end
 end
 
-function EventFrame:PLAYER_LOGIN()
+function Addon:OnInitialize()
 	if UnitFactionGroup("player") == "Horde" then
 		EnemyRaces = AllianceRaces
 	else
 		EnemyRaces = HordeRaces
 	end
+
+	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	self:RegisterEvent("PLAYER_TARGET_CHANGED")
+
 end
 
+function Addon:PLAYER_TARGET_CHANGED(event)
+	self:DebugPrint(event)
+	if UnitExists("target") then
+	end
+end
+
+function Addon:OnSlashCommand(msg)
+	if msg == "foo" then
+		self:Print("Testing msg argument: %s %s", msg, "and another")
+	else
+		self:Print(msg)
+	end
+end
