@@ -111,7 +111,7 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 		print(hostileMsg)
 	end]]
 	--print(select(2, PlayerIsHostile(srcFlags, event, race, srcGUID)))
-
+	--TODO: We should probably cache character data rather than keep calling GetPlayerInfoByGUID since this function is called so often
 	if PlayerIsHostile(srcFlags, event, race, srcGUID) and IsPlayerInDangerZone() then
 		if EnemiesSeen[name] then
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
