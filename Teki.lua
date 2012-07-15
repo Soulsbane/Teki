@@ -4,40 +4,23 @@ local bit_band = bit.band
 local EnemiesSeen = {}
 
 local AllianceRaces = {
-	["Draenei"] = true,
-	["Dwarf"] = true,
-	["Gnome"] = true,
-	["Human"] = true,
-	["Night Elf"] = true,
+	["Human"]  = true,
 	["Worgen"] = true,
+	["Gnome"] = true,
+	["Draenei"] = true,
+	["NightElf"] = true,
+	["Dwarf"] = true,
 }
---TODO: Change race tables to use racefilename instead
+
 --TODO: Notify the player if the detected unit has cast a stelth spell
---[[ Filenames
-Human
-Worgen
-Gnome
-Draenei
-NightElf
-Dwarf
-]]
 local HordeRaces = {
-	["Blood Elf"] = true,
-	["Goblin"] = true,
+	["Troll"]= true,
+	["BloodElf"]  = true,
 	["Orc"] = true,
 	["Tauren"] = true,
-	["Troll"] = true,
-	["Undead"] = true,
+	["Scourge"] = true,
+	["Goblin"] = true,
 }
---[[ Filenames
-Troll
-BloodElf
-Orc
-Tauren
-Scourge
-Goblin
-]]
-
 
 local function TekiPrint(msg)
 	print("Teki: ", msg)
@@ -51,23 +34,16 @@ local function IsPlayerInDangerZone()
 	end
 end
 
-local function PlayerIsHostile(flag, event, race, srcGUID)
+local function PlayerIsHostile(flag, event, raceFileName, srcGUID)
 	local suffix = event:match(".+(_.-)$")
 
 	if bit_band(flag, 0x548) == 0x548 then
 		return true, "bit_band check with true value"
-	elseif EnemyRaces[race] then
+	elseif EnemyRaces[raceFileName] then
 		return true, "EnemyRaces check TRUE value"
 	else
 		return false, "EnemyRaces check FALSE value"
 	end
-
-	--NOTE: This detects every player unit including your pc
-	--[[if bit_band(srcGUID:sub(5,5), 0x7) == 0 then
-		return true
-	else
-		return false
-	end]]
 end
 
 local function WarnPlayer(name, class, classFilename, race, spellid, level)
@@ -105,14 +81,8 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 
 	class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
 
-	--[[]local hostile, hostileMsg = PlayerIsHostile(srcFlags, event, race, srcGUID)
-
-	if hostile then
-		print(hostileMsg)
-	end]]
-	--print(select(2, PlayerIsHostile(srcFlags, event, race, srcGUID)))
 	--TODO: We should probably cache character data rather than keep calling GetPlayerInfoByGUID since this function is called so often
-	if PlayerIsHostile(srcFlags, event, race, srcGUID) and IsPlayerInDangerZone() then
+	if PlayerIsHostile(srcFlags, event, racefilename, srcGUID) and IsPlayerInDangerZone() then
 		if EnemiesSeen[name] then
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
 			--Don't notify the player if we've already warned them before the timeout or they are still in same subzone
