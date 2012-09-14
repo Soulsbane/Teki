@@ -1,4 +1,5 @@
 local AddonName, Addon = ...
+--local _ = _
 local bit_band = bit.band
 
 local EnemiesSeen = {}
@@ -22,10 +23,6 @@ local HordeRaces = {
 	["Goblin"] = true,
 }
 
-local function TekiPrint(msg)
-	print("Teki: ", msg)
-end
-
 local function IsPlayerInDangerZone()
 	if IsInInstance() or UnitIsPVPSanctuary("player") or UnitInBattleground("player") then
 		return false
@@ -46,21 +43,11 @@ local function PlayerIsHostile(flag, event, raceFileName, srcGUID)
 	end
 end
 
-local function WarnPlayer(name, class, classFilename, race, spellid, level)
-
-	if level > 0 then
-		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
-		print("<<Warning>> Enemy Player near: ", name, race, class, "<".. level .. ">")
-	else
-		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
-		print("<<Warning>> Enemy Player near: ", name, race, class)
-	end
-end
-
 local function GetDelay(name)
 	--return EnemiesSeen[name].spamDelay or 1
 	return 30 --TODO: Add in actual spamDelay
 end
+
 function Addon:GetSubZoneText()
 	local subzone = GetSubZoneText()
 
@@ -68,6 +55,17 @@ function Addon:GetSubZoneText()
 		return GetZoneText()
 	else
 		return subzone
+	end
+end
+
+function Addon:WarnPlayer(name, class, classFilename, race, spellid, level)
+
+	if level > 0 then
+		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
+		self:Print("<<Warning>> Enemy Player near: %s %s %s <%s>", name, race, class, level)
+	else
+		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
+		self:Print("<<Warning>> Enemy Player near: %s %s %s", name, race, class)
 	end
 end
 
@@ -87,11 +85,11 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
 			--Don't notify the player if we've already warned them before the timeout or they are still in same subzone
 			if GetTime() - EnemiesSeen[name].currentTime > GetDelay(name) and EnemiesSeen[name].currentZone ~= Addon:GetSubZoneText() then
-				WarnPlayer(name, class, classFilename, race, spellid, level)
+				self:WarnPlayer(name, class, classFilename, race, spellid, level)
 				EnemiesSeen[name] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
 			end
 		else
-			WarnPlayer(name, class, classFilename, race, spellid, level)
+			self:WarnPlayer(name, class, classFilename, race, spellid, level)
 			EnemiesSeen[name] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
 		end
 		--TODO: Add support for KOS. Similar to Obituary but simplier
