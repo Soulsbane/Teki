@@ -1,5 +1,4 @@
 local AddonName, Addon = ...
---local _ = _
 local bit_band = bit.band
 
 local EnemiesSeen = {}
