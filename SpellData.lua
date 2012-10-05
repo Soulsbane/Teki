@@ -1185,3 +1185,7 @@ local SpellData = {
 	[131973] = 90,
 	[132158] = 5,
 }
+
+function Addon:GetLevelFromSpellID(spellid)
+	return SpellData[spellid] or 0
+end
