@@ -73,7 +73,7 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 	if not srcName then return end
 	local class, race, sex, name, realm
 	local spellid, name, school, missType, amount = ...
-	local level = Addon:GetLevelFromSpellID(spellid)
+	local level = Addon:GetPlayerLevel(spellid)
 
 
 	class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
@@ -104,6 +104,18 @@ function Addon:OnInitialize()
 	end
 
 	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+end
+
+function Addon:GetPlayerLevel(spellid)
+	--TODO: Check if we are in a dungeon
+	local mapMinLevel, mapMaxLevel = GetCurrentMapLevelRange()
+	local spellLevel = Addon:GetLevelFromSpellID(spellid)
+
+	if mapMinLevel > spellLevel then
+		return mapMinLevel
+	else
+		return spellLevel
+	end
 end
 
 function Addon:OnSlashCommand(msg)

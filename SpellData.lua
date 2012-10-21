@@ -1,3 +1,5 @@
+local AddonName, Addon = ...
+
 local SpellData = {
 	[10] = 52,
 	[17] = 5,
