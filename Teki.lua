@@ -31,14 +31,12 @@ local function IsPlayerInDangerZone()
 end
 
 local function PlayerIsHostile(flag, event, raceFileName, srcGUID)
-	local suffix = event:match(".+(_.-)$")
-
 	if bit_band(flag, 0x548) == 0x548 then
-		return true, "bit_band check with true value"
+		return true
 	elseif EnemyRaces[raceFileName] then
-		return true, "EnemyRaces check TRUE value"
+		return true
 	else
-		return false, "EnemyRaces check FALSE value"
+		return false
 	end
 end
 
