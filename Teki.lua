@@ -77,7 +77,7 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 	class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
 
 	--TODO: We should probably cache character data rather than keep calling GetPlayerInfoByGUID since this function is called so often
-	if PlayerIsHostile(srcFlags, event, racefilename, srcGUID) and IsPlayerInDangerZone() then
+	if PlayerIsHostile(srcFlags, event, raceFileName, srcGUID) and IsPlayerInDangerZone() then
 		if EnemiesSeen[name] then
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
 			--Don't notify the player if we've already warned them before the timeout or they are still in same subzone
@@ -106,7 +106,7 @@ end
 
 function Addon:GetPlayerLevel(spellid)
 	--TODO: Check if we are in a dungeon
-	local mapMinLevel, mapMaxLevel = GetCurrentMapLevelRange()
+	local mapMinLevel, mapMaxLevel = GetCurrentMapLevelRange() or 1
 	local spellLevel = Addon:GetLevelFromSpellID(spellid)
 
 	if mapMinLevel > spellLevel then
