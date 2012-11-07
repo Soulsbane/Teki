@@ -69,7 +69,7 @@ end
 function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcGUID, srcName, srcFlags, srcFlags2, dstGUID, dstName, dstFlags, dstFlags2, ...)
 
 	if not srcName then return end
-	local class, race, sex, name, realm
+	local class, race, sex, name, realm, raceFileName, classFilename
 	local spellid, name, school, missType, amount = ...
 	local level = Addon:GetPlayerLevel(spellid)
 
