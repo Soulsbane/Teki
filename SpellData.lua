@@ -1191,3 +1191,4 @@ local SpellData = {
 function Addon:GetLevelFromSpellID(spellid)
 	return SpellData[spellid] or 0
 end
+

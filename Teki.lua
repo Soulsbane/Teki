@@ -57,7 +57,7 @@ end
 
 function Addon:WarnPlayer(name, class, classFilename, race, spellid, level)
 
-	if level > 0 then
+	if level and level > 0 then
 		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
 		self:Print("<<Warning>> Enemy Player near: %s %s %s <%s>", name, race, class, level)
 	else
@@ -67,12 +67,11 @@ function Addon:WarnPlayer(name, class, classFilename, race, spellid, level)
 end
 
 function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcGUID, srcName, srcFlags, srcFlags2, dstGUID, dstName, dstFlags, dstFlags2, ...)
-
 	if not srcName then return end
+
 	local class, race, sex, name, realm, raceFileName, classFilename
 	local spellid, name, school, missType, amount = ...
 	local level = Addon:GetPlayerLevel(spellid)
-
 
 	class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
 
@@ -107,12 +106,15 @@ end
 function Addon:GetPlayerLevel(spellid)
 	--TODO: Check if we are in a dungeon
 	local mapMinLevel, mapMaxLevel = GetCurrentMapLevelRange() or 1
-	local spellLevel = Addon:GetLevelFromSpellID(spellid)
+	local spellLevel = GetSpellLevelLearned(spellid)
 
-	if mapMinLevel > spellLevel then
-		return mapMinLevel
+	--FIXME: GetSpellLevelLearned seems to return erroneous numbers in my limited testing. More testing is needed.
+	if spellLevel then
+		if mapMinLevel > spellLevel then
+			return mapMinLevel
+		end
 	else
-		return spellLevel
+		return mapMinLevel
 	end
 end
 
