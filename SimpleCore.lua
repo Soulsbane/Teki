@@ -3,15 +3,16 @@ local AddonFrame = CreateFrame("Frame", AddonName .. "AddonFrame", UIParent)
 
 local AddonObject = {}
 local DebugEnabled = false
-local SavedVariableDefaults
 local EventHandlers = {}
-local TimerDelay, TotalTimeElapsed = 1, 0
-
+local MessageHandlers = {}
+local Timers = {}
 local Modules = {}
-local DisabledModules = {}
 
 local PRINTHEADER = "|cff33ff99" .. AddonName .. "|r: "
 local DEBUGHEADER = "|cff33ff99" .. AddonName .. "|cfffffb00" .. "(DEBUG)" .. "|r: "
+
+Addon.FrameworkName = "SimpleCore"
+Addon.FrameworkVersion = "1.0.0"
 
 ---------------------------------------
 -- Utility Functions
@@ -23,19 +24,29 @@ local function DispatchMethod(func, ...)
 end
 
 function Addon:DispatchModuleMethod(func, ...)
-	for k, v in pairs(Modules) do
-		if v[func] then
-			v[func](v, ...)
+	for name, obj in pairs(Modules) do
+		if obj[func] and obj.enabled then
+			obj[func](obj, ...)
 		end
 	end
 end
 
 function AddonObject:Print(...)
-	--INFO: If this is a module calling print so use its header instead
+	--INFO: If this is a module calling Print use its header instead
 	if self.printHeader then
 		print(self.printHeader, string.format(...))
 	else
 		print(PRINTHEADER, string.format(...))
+	end
+end
+
+function Addon:SetHeaders(printHeader, debugHeader)
+	if printHeader then
+		PRINTHEADER = printHeader
+	end
+
+	if debugHeader then
+		DEBUGHEADER = debugHeader
 	end
 end
 
@@ -81,80 +92,185 @@ end
 
 AddonFrame:SetScript("OnEvent", OnEvent)
 
-function AddonObject:RegisterEvent(event, handler)
+function AddonObject:RegisterEvent(eventName, handler)
 	if not handler then
-		handler = event
+		handler = eventName
 	end
 
-	if type(event) == "table" then
-		for _,e in pairs(event) do
-			if not EventHandlers[e] then
-				EventHandlers[e] = {}
+	if type(eventName) == "table" then
+		for _, name in pairs(eventName) do
+			if not EventHandlers[name] then
+				EventHandlers[name] = {}
 			end
-			AddonFrame:RegisterEvent(e)
-			EventHandlers[e][self] = handler
+			AddonFrame:RegisterEvent(name)
+			EventHandlers[name][self] = handler
 		end
 	else
-		if not EventHandlers[event] then
-			EventHandlers[event] = {}
+		if not EventHandlers[eventName] then
+			EventHandlers[eventName] = {}
 		end
-		AddonFrame:RegisterEvent(event)
-		EventHandlers[event][self] = handler
+		AddonFrame:RegisterEvent(eventName)
+		EventHandlers[eventName][self] = handler
 	end
 end
 
-function AddonObject:UnregisterEvent(event)
-	local obj = EventHandlers[event]
+function AddonObject:UnregisterEvent(eventName)
+	local obj = EventHandlers[eventName]
 
 	if obj then
 		obj[self] = nil
 		if not next(obj) then
-			EventHandlers[event] = nil
-			AddonFrame:UnregisterEvent(event)
+			EventHandlers[eventName] = nil
+			AddonFrame:UnregisterEvent(eventName)
 		end
 	end
 end
 
 function AddonObject:UnregisterAllEvents()
-	for event, obj in pairs(EventHandlers) do
+	for eventName, obj in pairs(EventHandlers) do
 		obj[self] = nil
 
 		if not next(obj) then
-			EventHandlers[event] = nil
-			frame:UnregisterEvent(event)
+			EventHandlers[eventName] = nil
+			AddonFrame:UnregisterEvent(eventName)
 		end
 	end
 end
+
+--------------------------------------
+-- Message Event Functions
+---------------------------------------
+function AddonObject:DispatchMessage(messageName, ...)
+	local handlers = MessageHandlers[messageName]
+
+	if handlers then
+		for obj, func in pairs(handlers) do
+				if type(func) == "string" then
+					if type(obj[func]) == "function" then
+						obj[func](obj, messageName, ...)
+					end
+				else
+					func(messageName, ...)
+				end
+			end
+	end
+end
+
+function AddonObject:RegisterMessage(messageName, handler)
+	if not handler then
+		handler = messageName
+	end
+
+	if type(messageName) == "table" then
+		for _, name in pairs(messageName) do
+			if not MessageHandlers[name] then
+				MessageHandlers[name] = {}
+			end
+			MessageHandlers[name][self] = handler
+		end
+	else
+		if not MessageHandlers[messageName] then
+			MessageHandlers[messageName] = {}
+		end
+		MessageHandlers[messageName][self] = handler
+	end
+end
+
+function AddonObject:UnregisterMessage(messageName)
+	local obj = MessageHandlers[messageName]
+
+	if obj then
+		obj[self] = nil
+		if not next(obj) then
+			MessageHandlers[messageName] = nil
+		end
+	end
+end
+
+function AddonObject:UnregisterAllMessages()
+	for messageName, obj in pairs(MessageHandlers) do
+		obj[self] = nil
+
+		if not next(obj) then
+			MessageHandlers[messageName] = nil
+		end
+	end
+end
+
 --------------------------------------
 -- Timer Functions
 ---------------------------------------
 AddonFrame:SetScript("OnUpdate", function(self, elapsed)
-	TotalTimeElapsed = TotalTimeElapsed + elapsed
+	for _, timer in pairs(Timers) do
+		timer.totalTimeElapsed = timer.totalTimeElapsed + elapsed
 
-	if TotalTimeElapsed < TimerDelay then return end
-	TotalTimeElapsed = 0
+		if timer.totalTimeElapsed > timer.delay then
+			timer.object[timer.func](timer.object, elapsed)
 
-	DispatchMethod("OnTimer", elapsed)
+			if timer.repeating then
+				timer.totalTimeElapsed = 0
+			else
+				--INFO: If this is a non-repeating timer remove it from Timers
+				Timers[timer.handle] = nil
+			end
+		end
+	end
 end)
 
-function Addon:StartTimer(delay)
-	if delay then
-		self:SetTimerDelay(delay)
+function AddonObject:StartTimer(delay, func, repeating)
+	local timer = {}
+	local handle = tostring(timer)
+
+	timer.object = self
+	timer.handle = handle
+	timer.delay = delay or 60
+	timer.repeating = true
+	timer.totalTimeElapsed = 0
+	timer.func = func or "OnTimer"
+
+	if repeating == nil then
+		timer.repeating = true
+	else
+		timer.repeating = repeating
 	end
+
+	Timers[handle] = timer
 	AddonFrame:Show()
+
+	return handle
 end
 
-function Addon:StopTimer()
-	AddonFrame:Hide()
+function AddonObject:StopTimer(handle)
+	if Timers[handle] then
+		Timers[handle] = nil
+	end
 end
 
-function Addon:SetTimerDelay(delay)
-	TimerDelay = delay
+function AddonObject:StopAllTimers()
+	wipe(Timers)
+end
+
+function AddonObject:SetTimerDelay(handle, delay)
+	Timers[handle].delay = delay
 end
 
 ---------------------------------------
 -- Slash Command Functions
 ---------------------------------------
+local function HandleDebugToggle(msg)
+	local command, enable = strsplit(" ", msg)
+
+	if command == "debug" then
+		if enable == "enable" then
+			Addon:EnableDebug(true)
+			Addon:DispatchModuleMethod("EnableDebug", true)
+		else
+			Addon:EnableDebug(false)
+			Addon:DispatchModuleMethod("EnableDebug", false)
+		end
+	end
+end
+
 function Addon:RegisterSlashCommand(name, func)
 	if SlashCmdList[name] then
 		self:DebugPrint("Error: Slash command " .. command .. " already exists!")
@@ -162,12 +278,14 @@ function Addon:RegisterSlashCommand(name, func)
 		_G["SLASH_".. name:upper().."1"] = "/" .. name
 
 		if type(func) == "string" then
-			--NOTE: Register a custom function to handle slash commands
+			--INFO: Register a custom function to handle slash commands
 			SlashCmdList[name:upper()] = function(msg)
+				HandleDebugToggle(msg)
 				DispatchMethod(func, strsplit(" ", msg))
 			end
 		else
 			SlashCmdList[name:upper()] = function(msg)
+				HandleDebugToggle(msg)
 				DispatchMethod("OnSlashCommand", strsplit(" ", msg))
 			end
 		end
@@ -177,29 +295,41 @@ end
 ---------------------------------------
 -- SavedVariables(Database) Functions
 ---------------------------------------
-local function FlushDB()
-	for k, v in pairs(SavedVariableDefaults) do
-		if v == Addon.db[k] then
-			Addon.db[k] = nil
+local function CopyDefaults(src, dest)
+	for k, v in pairs(src) do
+		if type(v) == "table" then
+			if not rawget(dest, k) then rawset(dest, k, {}) end
+			if type(dest[k]) == "table" then
+				CopyDefaults(dest[k], v)
+			end
+		else
+			if rawget(dest, k) == nil then
+				rawset(dest, k, v)
+			end
 		end
 	end
 end
 
 function Addon:InitializeDB(defaults)
 	local name = AddonName .. "DB"
-	SavedVariableDefaults = defaults or {}
+	local db = {}
 
-	_G[name] = setmetatable(_G[name] or {}, {__index = SavedVariableDefaults})
-	self.db = {}
+	if defaults then
+		CopyDefaults(defaults, db)
+	end
+
+	_G[name] = db
 	self.db = _G[name]
+
+	return self.db
 end
 
 ---------------------------------------
 -- Module System
 ---------------------------------------
-function Addon:NewModule(name)
+function Addon:NewModule(name, defaults)
 	local obj
-	local defaults = {
+	local defaults = defaults or {
 		name = name,
 		printHeader = "|cff33ff99" .. AddonName .. "(" .. name .. ")" .. "|r: ",
 		debugHeader = "|cff33ff99" .. AddonName .. "(" .. name .. ")" .. "|cfffffb00" .. "(DEBUG)" .. "|r: ",
@@ -221,33 +351,27 @@ function Addon:IsModuleEnabled(name)
 end
 
 function Addon:EnableModule(name)
-	if DisabledModules[name] then
-		local obj
+	local obj = Modules[name]
 
-		Modules[name] = DisabledModules[name]
-		obj = Modules[name]
-
+	if obj then
 		if obj["OnEnable"] then
 			obj:OnEnable()
 		end
+		obj.enabled = true
 	else
 		self:DebugPrint("Module, %s, is already enabled or not loaded!", name)
 	end
 end
 
 function Addon:DisableModule(name)
-	if Modules[name] then
-		local obj
+	local obj = Modules[name]
 
-		DisabledModules[name] = Modules[name]
-		obj = Modules[name]
-
+	if obj then
 		if obj["OnDisable"] then
 			obj:OnDisable()
 		end
-
 		obj:UnregisterAllEvents()
-		Modules[name] = nil
+		obj.enabled = false
 	else
 		self:DebugPrint("Module, %s, is already disabled or not loaded!", name)
 	end
@@ -263,10 +387,6 @@ function Addon:PLAYER_LOGIN()
 
 	DispatchMethod("OnFullyLoaded")
 	self:DispatchModuleMethod("OnEnable")
-end
-
-function Addon:PLAYER_LOGOUT()
-	FlushDB()
 end
 
 function Addon:ADDON_LOADED(event, ...)
@@ -285,5 +405,4 @@ end
 
 setmetatable(Addon, { __index = AddonObject})
 Addon:RegisterEvent("PLAYER_LOGIN")
-Addon:RegisterEvent("PLAYER_LOGOUT")
 Addon:RegisterEvent("ADDON_LOADED")

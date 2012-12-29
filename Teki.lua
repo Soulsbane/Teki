@@ -56,7 +56,7 @@ function Addon:GetSubZoneText()
 end
 
 function Addon:WarnPlayer(name, class, classFilename, race, spellid, level)
-
+	--FIXME: race is a nil value sometimes?
 	if level and level > 0 then
 		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
 		self:Print("<<Warning>> Enemy Player near: %s %s %s <%s>", name, race, class, level)
