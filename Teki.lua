@@ -12,7 +12,6 @@ local AllianceRaces = {
 	["Dwarf"] = true,
 }
 
---TODO: Notify the player if the detected unit has cast a stelth spell
 local HordeRaces = {
 	["Troll"]= true,
 	["BloodElf"]  = true,
@@ -31,10 +30,10 @@ local function IsPlayerInDangerZone()
 end
 
 local function PlayerIsHostile(flag, event, raceFileName, srcGUID)
-	if bit_band(flag, 0x548) == 0x548 then
+	if bit_band(flag, COMBATLOG_OBJECT_REACTION_HOSTILE) == COMBATLOG_OBJECT_REACTION_HOSTILE then
 		return true
-	elseif EnemyRaces[raceFileName] then
-		return true
+	--elseif EnemyRaces[raceFileName] then
+	--	return true
 	else
 		return false
 	end
@@ -46,7 +45,7 @@ local function GetDelay(name)
 end
 
 function Addon:GetSubZoneText()
-	local subzone = GetSubZoneText()
+	local subzone = GetSubZoneText() or ""
 
 	if subzone == "" then
 		return GetZoneText()
@@ -57,6 +56,11 @@ end
 
 function Addon:WarnPlayer(name, class, classFilename, race, spellid, level)
 	--FIXME: race is a nil value sometimes?
+	if not name then return end
+	local race = race or ""
+	local class = class or ""
+	local level = level or 0
+
 	if level and level > 0 then
 		PlaySoundFile("Interface\\Addons\\Teki\\player.mp3")
 		self:Print("<<Warning>> Enemy Player near: %s %s %s <%s>", name, race, class, level)
@@ -70,23 +74,27 @@ function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcG
 	if not srcName then return end
 
 	local class, race, sex, name, realm, raceFileName, classFilename
-	local spellid, name, school, missType, amount = ...
+	local spellid, spellName, school, missType, amount = ...
 	local level = Addon:GetPlayerLevel(spellid)
 
 	class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
 
 	--TODO: We should probably cache character data rather than keep calling GetPlayerInfoByGUID since this function is called so often
 	if PlayerIsHostile(srcFlags, event, raceFileName, srcGUID) and IsPlayerInDangerZone() then
-		if EnemiesSeen[name] then
+		if event == "SPELL_AURA_APPLIED" and (spellName == "Stealth" or spellName == "Prowl") then
+			--TODO: Handle steathed units
+		end
+
+		if EnemiesSeen[srcName] then
 			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
 			--Don't notify the player if we've already warned them before the timeout or they are still in same subzone
-			if GetTime() - EnemiesSeen[name].currentTime > GetDelay(name) and EnemiesSeen[name].currentZone ~= Addon:GetSubZoneText() then
-				self:WarnPlayer(name, class, classFilename, race, spellid, level)
-				EnemiesSeen[name] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
+			if GetTime() - EnemiesSeen[srcName].currentTime > GetDelay(srcName) and EnemiesSeen[srcName].currentZone ~= Addon:GetSubZoneText() then
+				self:WarnPlayer(srcName, class, classFilename, race, spellid, level)
+				EnemiesSeen[srcName] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
 			end
 		else
-			self:WarnPlayer(name, class, classFilename, race, spellid, level)
-			EnemiesSeen[name] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
+			self:WarnPlayer(srcName, class, classFilename, race, spellid, level)
+			EnemiesSeen[srcName] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
 		end
 		--TODO: Add support for KOS. Similar to Obituary but simplier
 		--TODO: Return values from if/elseif then do most of the work involving GetPlayerInfoByGUID
