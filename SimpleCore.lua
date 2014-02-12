@@ -20,6 +20,8 @@ Addon.FrameworkVersion = "1.0.0"
 local function DispatchMethod(func, ...)
 	if type(func) == "string" and Addon[func] then
 		Addon[func](Addon, ...)
+	elseif type(func) == "function" then
+		func(...)
 	end
 end
 
@@ -31,12 +33,29 @@ function Addon:DispatchModuleMethod(func, ...)
 	end
 end
 
+local function Printf(header, ...)
+	if select("#", ...) > 1 then
+		local success, txt = pcall(string.format, ...)
+
+	    if success then
+	        print(header .. txt)
+	    else
+	    	if Addon:IsDebugEnabled() then
+	        	print(DEBUGHEADER .. string.gsub(txt, "'%?'", string.format("'%s'", "Printf")))
+	        end
+	    end
+	else
+		local txt = ...
+		print(header .. txt)
+	end
+end
+
 function AddonObject:Print(...)
 	--INFO: If this is a module calling Print use its header instead
-	if self.printHeader then
-		print(self.printHeader, string.format(...))
+	if self ~= Addon then
+		Printf(self.printHeader, ...)
 	else
-		print(PRINTHEADER, string.format(...))
+		Printf(PRINTHEADER, ...)
 	end
 end
 
@@ -53,12 +72,27 @@ end
 ---------------------------------------
 -- Debug Functions
 ---------------------------------------
+local function DebugPrint(header, ...)
+	if select("#", ...) > 1 then
+		local success, txt = pcall(string.format, ...)
+
+	    if success then
+	        print(header .. txt)
+	    else
+        	print(DEBUGHEADER .. string.gsub(txt, "'%?'", string.format("'%s'", "Printf")))
+	    end
+	else
+		local txt = ...
+		print(header .. txt)
+	end
+end
+
 function AddonObject:DebugPrint(...)
 	if DebugEnabled == true then
 		if self.debugHeader then
-			print(self.debugHeader, string.format(...))
+			DebugPrint(self.debugHeader, ...)
 		else
-			print(DEBUGHEADER, string.format(...))
+			DebugPrint(DEBUGHEADER, ...)
 		end
 	end
 end
@@ -205,28 +239,28 @@ AddonFrame:SetScript("OnUpdate", function(self, elapsed)
 		timer.totalTimeElapsed = timer.totalTimeElapsed + elapsed
 
 		if timer.totalTimeElapsed > timer.delay then
-			timer.object[timer.func](timer.object, elapsed)
+			timer.object[timer.func](timer.object, elapsed, timer.name)
 
 			if timer.repeating then
 				timer.totalTimeElapsed = 0
 			else
 				--INFO: If this is a non-repeating timer remove it from Timers
-				Timers[timer.handle] = nil
+				timer.object:StopTimer(timer.name)
 			end
 		end
 	end
 end)
 
-function AddonObject:StartTimer(delay, func, repeating)
+function AddonObject:StartTimer(delay, func, repeating, name)
 	local timer = {}
-	local handle = tostring(timer)
+	local name = name or tostring(timer) -- NOTE: If you are going to create more than one timer you should really name it
 
 	timer.object = self
-	timer.handle = handle
 	timer.delay = delay or 60
 	timer.repeating = true
 	timer.totalTimeElapsed = 0
 	timer.func = func or "OnTimer"
+	timer.name = name
 
 	if repeating == nil then
 		timer.repeating = true
@@ -234,24 +268,27 @@ function AddonObject:StartTimer(delay, func, repeating)
 		timer.repeating = repeating
 	end
 
-	Timers[handle] = timer
+	Timers[name] = timer
 	AddonFrame:Show()
 
-	return handle
+	return name
 end
 
-function AddonObject:StopTimer(handle)
-	if Timers[handle] then
-		Timers[handle] = nil
+function AddonObject:StopTimer(name)
+	if Timers[name] then
+		DispatchMethod("OnTimerStop", name)
+		Timers[name] = nil
 	end
 end
 
 function AddonObject:StopAllTimers()
+	--TODO: Dispatch calls to stop functions
+	DispatchMethod("OnStopAllTimers")
 	wipe(Timers)
 end
 
-function AddonObject:SetTimerDelay(handle, delay)
-	Timers[handle].delay = delay
+function AddonObject:SetTimerDelay(name, delay)
+	Timers[name].delay = delay
 end
 
 ---------------------------------------
@@ -259,7 +296,7 @@ end
 ---------------------------------------
 local function HandleDebugToggle(msg)
 	local command, enable = strsplit(" ", msg)
-
+-- FIXME: EnableDebug changed to DebugToggle
 	if command == "debug" then
 		if enable == "enable" then
 			Addon:EnableDebug(true)
@@ -324,6 +361,33 @@ function Addon:InitializeDB(defaults)
 	return self.db
 end
 
+
+---------------------------------------
+-- Defer Function Calls
+---------------------------------------
+local DeferFrame = CreateFrame("Frame", AddonName .. "DeferFrame", UIParent)
+DeferFrame.Queue = {}
+
+function AddonObject:DeferFunctionCall(func, ...)
+	local args = { ... }
+
+	if InCombatLockdown() then
+		DeferFrame.Queue[func] = { ... }
+		return true
+	else
+		DispatchMethod(func, ...)
+		return false
+	end
+end
+
+DeferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+DeferFrame:SetScript("OnEvent", function(self, event, ...)
+    for func, args in pairs(DeferFrame.Queue) do
+        DispatchMethod(func, unpack(args))
+    end
+    table.wipe(DeferFrame.Queue)
+end)
+
 ---------------------------------------
 -- Module System
 ---------------------------------------
@@ -375,6 +439,10 @@ function Addon:DisableModule(name)
 	else
 		self:DebugPrint("Module, %s, is already disabled or not loaded!", name)
 	end
+end
+
+function Addon:IterateModules()
+	return Modules
 end
 
 ---------------------------------------

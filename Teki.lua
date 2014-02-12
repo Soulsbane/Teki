@@ -29,11 +29,15 @@ local function IsPlayerInDangerZone()
 	end
 end
 
-local function PlayerIsHostile(flag, event, raceFileName, srcGUID)
+local function PlayerIsHostile(flag, event, raceFileName, guid)
 	if bit_band(flag, COMBATLOG_OBJECT_REACTION_HOSTILE) == COMBATLOG_OBJECT_REACTION_HOSTILE then
-		return true
-	--elseif EnemyRaces[raceFileName] then
-	--	return true
+		local src = tonumber(guid:sub(5,5), 16)
+
+		if bit.band(src, 0x7) == 0 then
+			return true
+		else
+			return false
+		end
 	else
 		return false
 	end
