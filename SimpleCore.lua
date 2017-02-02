@@ -11,9 +11,6 @@ local Modules = {}
 local PRINTHEADER = "|cff33ff99" .. AddonName .. "|r: "
 local DEBUGHEADER = "|cff33ff99" .. AddonName .. "|cfffffb00" .. "(DEBUG)" .. "|r: "
 
-Addon.FrameworkName = "SimpleCore"
-Addon.FrameworkVersion = "1.0.0"
-
 ---------------------------------------
 -- Utility Functions
 ---------------------------------------
@@ -40,13 +37,18 @@ local function Printf(header, ...)
 	    if success then
 	        print(header .. txt)
 	    else
-	    	if Addon:IsDebugEnabled() then
+	    	if DebugEnabled then --INFO: We will only make it here if a nil value was passed so only show if debug mode is enabled　
 	        	print(DEBUGHEADER .. string.gsub(txt, "'%?'", string.format("'%s'", "Printf")))
 	        end
 	    end
 	else
 		local txt = ...
-		print(header .. txt)
+
+		if txt then
+			print(header .. txt)
+		else
+			print(DEBUGHEADER .. "Nil value was passed to Printf!")
+		end
 	end
 end
 
@@ -72,27 +74,12 @@ end
 ---------------------------------------
 -- Debug Functions
 ---------------------------------------
-local function DebugPrint(header, ...)
-	if select("#", ...) > 1 then
-		local success, txt = pcall(string.format, ...)
-
-	    if success then
-	        print(header .. txt)
-	    else
-        	print(DEBUGHEADER .. string.gsub(txt, "'%?'", string.format("'%s'", "Printf")))
-	    end
-	else
-		local txt = ...
-		print(header .. txt)
-	end
-end
-
 function AddonObject:DebugPrint(...)
 	if DebugEnabled == true then
 		if self.debugHeader then
-			DebugPrint(self.debugHeader, ...)
+			Printf(self.debugHeader, ...)
 		else
-			DebugPrint(DEBUGHEADER, ...)
+			Printf(DEBUGHEADER, ...)
 		end
 	end
 end
@@ -283,8 +270,8 @@ end
 
 function AddonObject:StopAllTimers()
 	--TODO: Dispatch calls to stop functions
-	DispatchMethod("OnStopAllTimers")
 	wipe(Timers)
+	DispatchMethod("OnStopAllTimers")
 end
 
 function AddonObject:SetTimerDelay(name, delay)
@@ -296,12 +283,14 @@ end
 ---------------------------------------
 local function HandleDebugToggle(msg)
 	local command, enable = strsplit(" ", msg)
--- FIXME: EnableDebug changed to DebugToggle
+
 	if command == "debug" then
 		if enable == "enable" then
 			Addon:EnableDebug(true)
 			Addon:DispatchModuleMethod("EnableDebug", true)
+			Addon:DebugPrint("Enabling debug mode!")
 		else
+			Addon:DebugPrint("Disabling debug mode!")
 			Addon:EnableDebug(false)
 			Addon:DispatchModuleMethod("EnableDebug", false)
 		end
@@ -453,7 +442,7 @@ function Addon:PLAYER_LOGIN()
 		self:RegisterSlashCommand(AddonName)
 	end
 
-	DispatchMethod("OnFullyLoaded")
+	DispatchMethod("OnEnable")
 	self:DispatchModuleMethod("OnEnable")
 end
 
