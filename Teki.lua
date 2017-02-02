@@ -3,24 +3,7 @@ local bit_band = bit.band
 
 local EnemiesSeen = {}
 
-local AllianceRaces = {
-	["Human"]  = true,
-	["Worgen"] = true,
-	["Gnome"] = true,
-	["Draenei"] = true,
-	["NightElf"] = true,
-	["Dwarf"] = true,
-}
-
-local HordeRaces = {
-	["Troll"]= true,
-	["BloodElf"]  = true,
-	["Orc"] = true,
-	["Tauren"] = true,
-	["Scourge"] = true,
-	["Goblin"] = true,
-}
-
+--lua:18: bad argument #1 to 'band' (number expected, got nil)
 local function IsPlayerInDangerZone()
 	if IsInInstance() or UnitIsPVPSanctuary("player") or UnitInBattleground("player") then
 		return false
@@ -31,13 +14,14 @@ end
 
 local function PlayerIsHostile(flag, event, raceFileName, guid)
 	if bit_band(flag, COMBATLOG_OBJECT_REACTION_HOSTILE) == COMBATLOG_OBJECT_REACTION_HOSTILE then
-		local src = tonumber(guid:sub(5,5), 16)
+		--[[local src = tonumber(guid:sub(5,5), 16)
 
 		if bit.band(src, 0x7) == 0 then
 			return true
 		else
 			return false
-		end
+		end]]
+		return true
 	else
 		return false
 	end
@@ -75,43 +59,38 @@ function Addon:WarnPlayer(name, class, classFilename, race, spellid, level)
 end
 
 function Addon:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, event, hideCaster, srcGUID, srcName, srcFlags, srcFlags2, dstGUID, dstName, dstFlags, dstFlags2, ...)
-	if not srcName then return end
+	if not srcName and not srcGUID then return end
 
 	local class, race, sex, name, realm, raceFileName, classFilename
 	local spellid, spellName, school, missType, amount = ...
 	local level = Addon:GetPlayerLevel(spellid)
 
-	class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
 
 	--TODO: We should probably cache character data rather than keep calling GetPlayerInfoByGUID since this function is called so often
 	if PlayerIsHostile(srcFlags, event, raceFileName, srcGUID) and IsPlayerInDangerZone() then
-		if event == "SPELL_AURA_APPLIED" and (spellName == "Stealth" or spellName == "Prowl") then
-			--TODO: Handle steathed units
-		end
+		local srcType = strsub(srcGUID, 1,6)
 
-		if EnemiesSeen[srcName] then
-			--NOTE: Check if level is greater than Enemy:GetLevel and if so update level to new value
-			--Don't notify the player if we've already warned them before the timeout or they are still in same subzone
-			if GetTime() - EnemiesSeen[srcName].currentTime > GetDelay(srcName) and EnemiesSeen[srcName].currentZone ~= Addon:GetSubZoneText() then
+		if srcType == "Player" then
+			class, classFilename, race, raceFileName, sex, name, realm = GetPlayerInfoByGUID(srcGUID)
+
+			if event == "SPELL_AURA_APPLIED" and (spellName == "Stealth" or spellName == "Prowl") then
+				--TODO: Handle steathed units
+			end
+
+			if EnemiesSeen[srcName] then
+				if GetTime() - EnemiesSeen[srcName].currentTime > GetDelay(srcName) and EnemiesSeen[srcName].currentZone ~= Addon:GetSubZoneText() then
+					self:WarnPlayer(srcName, class, classFilename, race, spellid, level)
+					EnemiesSeen[srcName] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
+				end
+			else
 				self:WarnPlayer(srcName, class, classFilename, race, spellid, level)
 				EnemiesSeen[srcName] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
 			end
-		else
-			self:WarnPlayer(srcName, class, classFilename, race, spellid, level)
-			EnemiesSeen[srcName] = { currentTime = GetTime(), currentZone = Addon:GetSubZoneText() }
 		end
-		--TODO: Add support for KOS. Similar to Obituary but simplier
-		--TODO: Return values from if/elseif then do most of the work involving GetPlayerInfoByGUID
 	end
 end
 
 function Addon:OnInitialize()
-	if UnitFactionGroup("player") == "Horde" then
-		EnemyRaces = AllianceRaces
-	else
-		EnemyRaces = HordeRaces
-	end
-
 	self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 end
 
