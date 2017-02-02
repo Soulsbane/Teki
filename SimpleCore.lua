@@ -8,12 +8,27 @@ local MessageHandlers = {}
 local Timers = {}
 local Modules = {}
 
-local PRINTHEADER = "|cff33ff99" .. AddonName .. "|r: "
-local DEBUGHEADER = "|cff33ff99" .. AddonName .. "|cfffffb00" .. "(DEBUG)" .. "|r: "
-
 ---------------------------------------
 -- Utility Functions
 ---------------------------------------
+local function CreateAddonObject(name, base)
+	local name = name
+	local base = base or {}
+
+	if name then
+		name = "(" .. name .. ")"
+	else
+		name = ""
+	end
+
+	base.name = name
+	base.enabled = true
+	base.printHeader = "|cff33ff99" .. AddonName .. name .. "|r: "
+	base.debugHeader = "|cff33ff99" .. AddonName .. name .. "|cfffffb00" .. "(DEBUG)" .. "|r: "
+
+	return setmetatable(base, { __index = AddonObject })
+end
+
 local function DispatchMethod(func, ...)
 	if type(func) == "string" and Addon[func] then
 		Addon[func](Addon, ...)
@@ -30,57 +45,42 @@ function Addon:DispatchModuleMethod(func, ...)
 	end
 end
 
-local function Printf(header, ...)
+function AddonObject:GetFormattedString(header, ...)
 	if select("#", ...) > 1 then
 		local success, txt = pcall(string.format, ...)
 
-	    if success then
-	        print(header .. txt)
-	    else
-	    	if DebugEnabled then --INFO: We will only make it here if a nil value was passed so only show if debug mode is enabled　
-	        	print(DEBUGHEADER .. string.gsub(txt, "'%?'", string.format("'%s'", "Printf")))
-	        end
-	    end
+		if success then
+			return (header .. txt)
+		else
+			if DebugEnabled then --INFO: We will only make it here if a nil value was passed so only show if debug mode is enabled
+				return (self.debugHeader .. string.gsub(txt, "'%?'", string.format("'%s'", "GetFormattedString")))
+			end
+		end
 	else
 		local txt = ...
 
 		if txt then
-			print(header .. txt)
+			return (header .. txt)
 		else
-			print(DEBUGHEADER .. "Nil value was passed to Printf!")
+			return (self.debugHeader .. "Nil value was passed to GetFormattedString!")
 		end
 	end
 end
 
 function AddonObject:Print(...)
-	--INFO: If this is a module calling Print use its header instead
-	if self ~= Addon then
-		Printf(self.printHeader, ...)
-	else
-		Printf(PRINTHEADER, ...)
-	end
-end
-
-function Addon:SetHeaders(printHeader, debugHeader)
-	if printHeader then
-		PRINTHEADER = printHeader
-	end
-
-	if debugHeader then
-		DEBUGHEADER = debugHeader
-	end
+		print(self:GetFormattedString(self.printHeader, ...))
 end
 
 ---------------------------------------
 -- Debug Functions
 ---------------------------------------
+local function DebugPrint(msg) --INFO: If AdiDebug is enabled this function will be overridden with AdiDebug's function
+	print(msg)
+end
+
 function AddonObject:DebugPrint(...)
-	if DebugEnabled == true then
-		if self.debugHeader then
-			Printf(self.debugHeader, ...)
-		else
-			Printf(DEBUGHEADER, ...)
-		end
+	if DebugEnabled then
+			DebugPrint(self:GetFormattedString(self.debugHeader, ...))
 	end
 end
 
@@ -100,14 +100,14 @@ local function OnEvent(frame, event, ...)
 
 	if handlers then
 		for obj, func in pairs(handlers) do
-				if type(func) == "string" then
-					if type(obj[func]) == "function" then
-						obj[func](obj, event, ...)
-					end
-				else
-					func(event, ...)
+			if type(func) == "string" then
+				if type(obj[func]) == "function" then
+					obj[func](obj, event, ...)
 				end
+			else
+				func(event, ...)
 			end
+		end
 	end
 end
 
@@ -221,55 +221,61 @@ end
 --------------------------------------
 -- Timer Functions
 ---------------------------------------
-AddonFrame:SetScript("OnUpdate", function(self, elapsed)
-	for _, timer in pairs(Timers) do
-		timer.totalTimeElapsed = timer.totalTimeElapsed + elapsed
-
-		if timer.totalTimeElapsed > timer.delay then
-			timer.object[timer.func](timer.object, elapsed, timer.name)
-
-			if timer.repeating then
-				timer.totalTimeElapsed = 0
-			else
-				--INFO: If this is a non-repeating timer remove it from Timers
-				timer.object:StopTimer(timer.name)
-			end
-		end
-	end
-end)
-
-function AddonObject:StartTimer(delay, func, repeating, name)
+local function StartTimer(object, delay, func, repeating, name)
 	local timer = {}
 	local name = name or tostring(timer) -- NOTE: If you are going to create more than one timer you should really name it
 
-	timer.object = self
+	if delay < 0.01 then
+		delay = 0.01 -- INFO: The lowest time C_Timer API allows.
+	end
+
+	timer.object = object
 	timer.delay = delay or 60
-	timer.repeating = true
-	timer.totalTimeElapsed = 0
+	timer.repeating = repeating
 	timer.func = func or "OnTimer"
 	timer.name = name
 
-	if repeating == nil then
-		timer.repeating = true
-	else
-		timer.repeating = repeating
+	Timers[name] = timer
+
+	timer.callback = function()
+		if not timer.stopped then
+			timer.object[timer.func](timer.object, timer.name)
+
+			if timer.repeating and not timer.stopped then
+				C_Timer.After(timer.delay, timer.callback)
+			else
+				Timers[name] = nil
+			end
+		end
 	end
 
-	Timers[name] = timer
-	AddonFrame:Show()
-
+	C_Timer.After(delay, timer.callback)
 	return name
 end
 
+function AddonObject:StartTimer(delay, func, name)
+	return StartTimer(self, delay, func, false, name)
+end
+
+function AddonObject:StartRepeatingTimer(delay, func, name)
+	return StartTimer(self, delay, func, true, name)
+end
+
 function AddonObject:StopTimer(name)
-	if Timers[name] then
-		DispatchMethod("OnTimerStop", name)
+	local timer = Timers[name]
+
+	if timer then
+		timer.stopped = true
 		Timers[name] = nil
+		DispatchMethod("OnTimerStop", name)
 	end
 end
 
 function AddonObject:StopAllTimers()
-	--TODO: Dispatch calls to stop functions
+	for name, _ in pairs(Timers) do
+		self:StopTimer(name)
+	end
+
 	wipe(Timers)
 	DispatchMethod("OnStopAllTimers")
 end
@@ -380,18 +386,10 @@ end)
 ---------------------------------------
 -- Module System
 ---------------------------------------
-function Addon:NewModule(name, defaults)
-	local obj
-	local defaults = defaults or {
-		name = name,
-		printHeader = "|cff33ff99" .. AddonName .. "(" .. name .. ")" .. "|r: ",
-		debugHeader = "|cff33ff99" .. AddonName .. "(" .. name .. ")" .. "|cfffffb00" .. "(DEBUG)" .. "|r: ",
-		enabled = true,
-	}
+function Addon:NewModule(name)
+	local obj = CreateAddonObject(name, nil)
 
-	obj = setmetatable(defaults, { __index = AddonObject })
 	Modules[name] = obj
-
 	return obj
 end
 
@@ -423,6 +421,7 @@ function Addon:DisableModule(name)
 		if obj["OnDisable"] then
 			obj:OnDisable()
 		end
+		--FIXME: Timers might keep going after disabling.
 		obj:UnregisterAllEvents()
 		obj.enabled = false
 	else
@@ -447,19 +446,22 @@ function Addon:PLAYER_LOGIN()
 end
 
 function Addon:ADDON_LOADED(event, ...)
-	self:StopTimer()
+	if AdiDebug then
+		DebugPrint = AdiDebug:GetSink(AddonName)
+	end
 
 	if ... == AddonName then
-		self:UnregisterEvent("ADDON_LOADED")
 		DispatchMethod("OnInitialize")
 		self:DispatchModuleMethod("OnInitialize")
 
 		if IsLoggedIn() then
 			self:PLAYER_LOGIN()
 		end
+	else
+		DispatchMethod("OnAddonLoaded", ...)
 	end
 end
 
-setmetatable(Addon, { __index = AddonObject})
+Addon = CreateAddonObject(nil, Addon)
 Addon:RegisterEvent("PLAYER_LOGIN")
 Addon:RegisterEvent("ADDON_LOADED")
